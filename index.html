@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shoot Jonas</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f2f2f2;--fg:#111}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111;--fg:#eee}}
+:root[data-theme="dark"]{--bg:#111;--fg:#eee}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;display:flex;justify-content:center;touch-action:none;user-select:none}
+#w{position:relative;height:100%;max-width:100%;aspect-ratio:9/14}
+canvas{width:100%;height:100%;display:block;background:#7ec8e3}
+#ov{position:absolute;inset:0;background:rgba(0,0,0,.8);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px;text-align:center;overflow:auto}
+button{font:inherit;padding:9px 14px;border-radius:8px;border:0;background:#f5b700;color:#000;font-weight:700}
+button:disabled{opacity:.4}
+.g{display:flex;gap:8px;align-items:center;justify-content:space-between;width:100%;max-width:320px;background:#222;padding:6px 10px;border-radius:8px;font-size:14px}
+h1,h2,p{margin:4px 0}
+</style></head><body>
+<div id="w"><canvas id="c" width="360" height="560"></canvas><div id="ov"></div><button id="m" onclick="mute=!mute;this.textContent=mute?'🔇':'🔊'" style="position:absolute;right:6px;bottom:6px;z-index:5;padding:4px 8px;font-size:18px">🔊</button></div>
+<script>
+const cv=document.getElementById('c'),x=cv.getContext('2d'),ov=document.getElementById('ov');
+const L=[ // name,hp,speed,size,zigzag,color
+["Jonas",3,.10,1,0,"#e8a"],["Fast Jonas",3,.20,1,0,"#6cf"],["Fat Jonas",9,.09,1.5,0,"#fb4"],
+["Tiny Jonas",2,.22,.55,.5,"#9f9"],["Zigzag Jonas",5,.17,1,1,"#c9f"],["Armored Jonas",14,.11,1.15,0,"#aab"],
+["Ninja Jonas",7,.26,.9,1,"#333"],["Turbo Jonas",8,.34,1,.3,"#f55"],["Giant Jonas",30,.09,2,0,"#8a5"],
+["Fast Fat Jonas",24,.2,1.5,.4,"#f80"],["Ghost Jonas",16,.28,1,1.3,"#dff"],["BOSS JONAS",60,.17,1.9,.6,"#a00"]];
+const N=["Sneaky","Angry","Sleepy","Mega","Laser","Robot","Zombie","Vampire","Pirate","Cowboy","Samurai","Wizard","Dragon","Alien","Shadow","Thunder","Inferno","Frozen","Cyber","KING"];
+N.forEach((n,k)=>L.push([k==19?"KING JONAS":n+" Jonas",30+k*3+(k==19?40:0),.14+k*.004,[1,1.3,.7,1.8,1][k%5],[0,.5,1,.3,1.2][k%5],`hsl(${k*18},70%,55%)`]));
+const G=[ // name,dmg,cooldown ms,hit radius,price,auto
+["Pistol",1,350,1,0,0],["Revolver",3,450,1.1,20,0],["SMG",2,110,1,40,1],["Shotgun",8,750,2.2,70,0],["Sniper",16,900,.8,100,0]];
+let lv=0,money=0,lives=3,own=[1,0,0,0,0],gun=0,j,hp,last=0,flash=0,hold=null,run=false,tp=0,pt=0,fx=[];
+function menu(h){ov.style.display='flex';ov.innerHTML=h}
+function start(){tone(400,.08,"square",.15,600);lv=0;money=0;lives=3;own=[1,0,0,0,0];gun=0;shop("Welcome! Shoot Jonas before he reaches you.")}
+function shop(msg){
+ let h=`<h2>${lv>=L.length?'':'Level '+(lv+1)+': '+L[lv][0]}</h2><p>${msg}</p><p>$${money} | Lives: ${lives}</p>`;
+ G.forEach((g,i)=>{h+=`<div class="g"><canvas width="72" height="44" data-g="${i}"></canvas><span>${g[0]}<br>dmg ${g[1]}</span>`+
+ (own[i]?`<button onclick="eq(${i})" ${gun==i?'disabled':''}>${gun==i?'Equipped':'Equip'}</button>`:
+ `<button onclick="buy(${i})" ${money<g[4]?'disabled':''}>Buy $${g[4]}</button>`)+`</div>`});
+ h+=`<button onclick="go()" style="margin-top:8px">Start Level ${lv+1}</button>`;menu(h);ov.querySelectorAll('canvas').forEach(c=>drawGun(c.getContext('2d'),+c.dataset.g,4,0,1))}
+function eq(i){gun=i;tone(500,.06,"square",.15,500);shop("")}
+function buy(i){if(money>=G[i][4]){money-=G[i][4];own[i]=1;gun=i;jingle([800,1200],"square")}shop("")}
+function go(){tone(400,.08,"square",.15,600);ov.style.display='none';const l=L[lv];j={t:0,ph:Math.random()*6,x:180};hp=l[1];run=true;fx=[];tp=performance.now()}
+let AC,mute=false;
+function ac(){AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state=='suspended')AC.resume();return AC}
+function tone(f,d,ty,v,e){if(mute)return;ac();const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();o.type=ty;o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(Math.max(30,e),t+d);g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(AC.destination);o.start();o.stop(t+d)}
+function noise(d,v,f){if(mute)return;ac();const n=Math.floor(AC.sampleRate*d),b=AC.createBuffer(1,n,AC.sampleRate),a=b.getChannelData(0);for(let i=0;i<n;i++)a[i]=(Math.random()*2-1)*(1-i/n);const s=AC.createBufferSource(),g=AC.createGain(),l=AC.createBiquadFilter();l.type='lowpass';l.frequency.value=f;g.gain.value=v;s.buffer=b;s.connect(l);l.connect(g);g.connect(AC.destination);s.start()}
+function jingle(ns,ty){ns.forEach((f,i)=>setTimeout(()=>tone(f,.2,ty||"triangle",.25,f),i*110))}
+function shotSnd(i){const p=[[.1,.35,3000,300,60],[.18,.5,2000,200,40],[.05,.2,4000,250,80],[.35,.7,1500,120,30],[.4,.6,2500,600,40]][i];noise(p[0],p[1],p[2]);tone(p[3],p[0],"sawtooth",.2,p[4])}
+function hit(px,py){
+ const l=L[lv],s=l[3]*(.25+.75*j.t),jy=200+330*j.t-55*s,r=G[gun][3]*42*s+8;
+ const d=Math.hypot(px-j.x,py-jy);fx.push({x:px,y:py,a:1});shotSnd(gun);
+ if(d<r){hp-=G[gun][1];flash=6;if(hp<=0)win();else tone(180,.08,"square",.2,70)}}
+function win(){run=false;money+=5;lv++;jingle([523,659,784,1047]);
+ if(lv>=L.length){menu(`<h1>YOU WIN!</h1><p>All ${L.length} Jonases defeated. $${money} earned.</p><button onclick="start()">Play again</button>`)}
+ else shop("Jonas down! +$5")}
+function lose(){run=false;lives--;jingle([300,220,160,100],"sawtooth");
+ if(lives<=0)menu(`<h1>GAME OVER</h1><p>Jonas got you on level ${lv+1}.</p><button onclick="start()">Try again</button>`);
+ else shop("Jonas got you! Lives left: "+lives)}
+function pos(e){const b=cv.getBoundingClientRect();return[(e.clientX-b.left)*360/b.width,(e.clientY-b.top)*560/b.height]}
+function shoot(){if(!hold||!run)return;const n=performance.now();if(n-last<G[gun][2])return;last=n;hit(hold[0],hold[1])}
+cv.addEventListener('pointerdown',e=>{hold=pos(e);shoot();if(!G[gun][5])hold=null});
+cv.addEventListener('pointermove',e=>{if(hold)hold=pos(e)});
+addEventListener('pointerup',()=>hold=null);
+function drawGun(c,i,ox,oy,s){c.save();c.translate(ox,oy);c.scale(s,s);
+ const R=(a,b,w,h,f)=>{c.fillStyle=f;c.fillRect(a,b,w,h)},D="#333",M="#999",B="#8b5a2b";
+ if(i==0){R(14,12,40,9,M);R(14,21,28,3,D);R(16,21,10,20,B)}
+ else if(i==1){R(14,12,46,6,M);R(10,10,16,12,D);R(26,18,8,4,D);R(12,22,10,20,B)}
+ else if(i==2){R(8,12,42,12,D);R(50,15,16,5,M);R(22,24,8,18,M);R(10,24,8,16,B);R(0,12,8,6,D)}
+ else if(i==3){R(20,12,50,5,M);R(20,17,50,4,D);R(10,12,16,11,D);R(34,21,16,6,B);R(0,14,12,12,B)}
+ else{R(16,16,54,3,M);R(8,12,28,10,D);R(22,5,22,6,M);R(0,14,10,12,B);R(60,19,2,10,D);R(66,19,2,10,D)}
+ c.restore()}
+function draw(){
+ x.clearRect(0,0,360,560);x.fillStyle="#7ec8e3";x.fillRect(0,0,360,200);
+ x.fillStyle="#5a9a4a";x.fillRect(0,200,360,360);x.fillStyle="#6aae58";
+ for(let i=0;i<6;i++){x.fillRect(180-20-i*60,200,6+i*4,360)}
+ if(run){const l=L[lv],s=l[3]*(.25+.75*j.t),fy=200+330*j.t,jx=j.x,top=fy-110*s;
+  x.save();x.translate(jx,fy);x.scale(s,s);
+  x.fillStyle="#222";x.fillRect(-22,-35,16,35);x.fillRect(6,-35,16,35);
+  x.fillStyle=flash>0?"#fff":l[5];x.fillRect(-28,-85,56,55);
+  x.fillStyle=flash>0?"#fff":"#fc9";x.fillRect(-40,-82,12,40);x.fillRect(28,-82,12,40);
+  x.beginPath();x.arc(0,-103,22,0,7);x.fill();
+  x.fillStyle="#000";x.fillRect(-12,-110,8,6);x.fillRect(4,-110,8,6);x.fillRect(-10,-93,20,4);
+  x.restore();
+  x.fillStyle="#fff";x.font="bold 14px sans-serif";x.textAlign="center";x.fillText(l[0],jx,Math.max(14,top-14));
+  x.fillStyle="#400";x.fillRect(jx-25,top-10,50,5);x.fillStyle="#e22";x.fillRect(jx-25,top-10,50*hp/l[1],5)}
+ fx.forEach(f=>{x.strokeStyle=`rgba(255,220,0,${f.a})`;x.lineWidth=2;x.beginPath();x.arc(f.x,f.y,6+(1-f.a)*14,0,7);x.stroke()});
+ x.fillStyle="#fff";x.font="bold 15px sans-serif";x.textAlign="left";
+ x.fillText(`Lv ${lv+1}/${L.length}  $${money}  Lives ${lives}`,8,20);x.textAlign="right";x.fillText(G[gun][0],352,20);
+ drawGun(x,gun,70,450,3)}
+function loop(n){
+ const dt=Math.min(.05,(n-pt)/1000);pt=n;
+ if(run){const l=L[lv];j.t+=l[2]*dt;j.ph+=dt*4;j.x=180+Math.sin(j.ph)*l[4]*90*(.3+j.t);flash--;
+  if(G[gun][5])shoot();
+  if(j.t>=1)lose()}
+ fx.forEach(f=>f.a-=dt*4);fx=fx.filter(f=>f.a>0);draw();requestAnimationFrame(loop)}
+menu(`<h1>SHOOT JONAS</h1><p>Tap to shoot. 32 levels, 5 guns, +$5 per level. Save up for better guns! Don't let Jonas reach you!</p><button onclick="start()">Play</button>`);
+requestAnimationFrame(loop);
+</script></body></html>
